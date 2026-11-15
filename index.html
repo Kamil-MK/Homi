@@ -11,26 +11,30 @@
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Ikony Lucide oraz React + Babel -->
+  <!-- React 18 (stabilne wersje UMD) + Babel -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Firebase SDK (kompatybilne bezpośrednio z przeglądarką) -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+
   <style>
     body { -webkit-tap-highlight-color: transparent; user-select: none; }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
-  <div id="root"></div>
+  <div id="root">
+    <div style="padding: 40px; text-align: center; font-family: sans-serif; color: #059669; font-weight: bold;">
+      Ładowanie Homi... 💍🦔
+    </div>
+  </div>
 
-  <script type="text/babel" data-type="module">
-    import React, { useState, useEffect } from 'https://esm.sh/react@18.3.1';
-    import ReactDOM from 'https://esm.sh/react-dom@18.3.1/client';
-    import {
-      Home, Sparkles, Shirt, ShoppingCart, Users, Plus, Check, Trash2,
-      Cloud, CloudOff, Award, RotateCcw, Wind
-    } from 'https://esm.sh/lucide-react@0.460.0';
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
-    import { getFirestore, doc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js';
+  <script type="text/babel">
+    const { useState, useEffect } = React;
 
-    // TWOJE KLUCZE FIREBASE (homi-dom)
+    // 1. KONFIGURACJA FIREBASE (homi-dom)
     const firebaseConfig = {
       apiKey: "AIzaSyDZWnw5OArzyHNmgGKDOATnq3gYlyO4m40",
       authDomain: "homi-dom.firebaseapp.com",
@@ -41,9 +45,17 @@
       measurementId: "G-W4SKHK140B"
     };
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+    let db = null;
+    try {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+      db = firebase.firestore();
+    } catch (e) {
+      console.error("Błąd Firebase:", e);
+    }
 
+    // 2. DANE STARTOWE
     const DAYS = [
       { short: 'Pon', full: 'Poniedziałek' },
       { short: 'Wt', full: 'Wtorek' },
@@ -123,20 +135,21 @@
         localStorage.setItem('homi_user', id);
       };
 
+      // Połączenie z chmurą Firestore na żywo
       useEffect(() => {
-        const docRef = doc(db, 'households', 'nasz-dom');
-        const unsub = onSnapshot(
-          docRef,
+        if (!db) return;
+        const docRef = db.collection('households').doc('nasz-dom');
+        const unsub = docRef.onSnapshot(
           (snap) => {
             setCloudReady(true);
-            if (snap.exists()) {
+            if (snap.exists) {
               const data = snap.data();
               if (data.users) setUsers(data.users);
               if (data.chores) setChores(data.chores);
               if (data.laundry) setLaundry(data.laundry);
               if (data.shopping) setShopping(data.shopping);
             } else {
-              setDoc(docRef, {
+              docRef.set({
                 users: INITIAL_USERS,
                 chores: INITIAL_CHORES,
                 laundry: INITIAL_LAUNDRY,
@@ -158,9 +171,9 @@
         setChores(nextChores);
         setLaundry(nextLaundry);
         setShopping(nextShopping);
+        if (!db) return;
         try {
-          const docRef = doc(db, 'households', 'nasz-dom');
-          await setDoc(docRef, {
+          await db.collection('households').doc('nasz-dom').set({
             users: nextUsers,
             chores: nextChores,
             laundry: nextLaundry,
@@ -175,6 +188,7 @@
       const getUser = (id) => users.find((u) => u.id === id) || users[0] || { name: 'Domownik', avatar: '🏠' };
       const activeUser = getUser(activeUserId);
 
+      // Zakupy
       const toggleBought = (itemId) => {
         const timeStr = new Date().toTimeString().slice(0, 5);
         let pointsDelta = 0;
@@ -214,6 +228,7 @@
       const deleteShoppingItem = (id) => syncState(users, chores, laundry, shopping.filter((i) => i.id !== id));
       const clearBoughtItems = () => syncState(users, chores, laundry, shopping.filter((i) => !i.bought));
 
+      // Sprzątanie
       const toggleChore = (choreId) => {
         let pointsDelta = 0;
         let targetUser = activeUserId;
@@ -258,6 +273,7 @@
 
       const deleteChore = (id) => syncState(users, chores.filter((c) => c.id !== id), laundry, shopping);
 
+      // Pranie
       const cycleLaundryStatus = (id) => {
         const order = ['Zaplanowane', 'W pralce', 'Suszy się', 'Gotowe'];
         const nextLaundry = laundry.map((l) => {
@@ -284,6 +300,7 @@
 
       const deleteLaundry = (id) => syncState(users, chores, laundry.filter((l) => l.id !== id), shopping);
 
+      // Domownicy
       const handleAddUser = (e) => {
         e.preventDefault();
         if (!newUserName.trim()) return;
@@ -305,23 +322,24 @@
 
       return (
         <div className={`min-h-screen bg-slate-50 text-slate-900 flex flex-col justify-between pb-20 ${largeText ? 'text-base' : 'text-sm'}`}>
+          {/* GÓRNY PASEK */}
           <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-3 py-2.5 shadow-sm">
             <div className="max-w-lg mx-auto">
               <div className="flex items-center justify-between gap-1">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold">
-                    <Home className="w-4 h-4" />
+                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-base">
+                    🏠
                   </div>
                   <div>
                     <div className="flex items-center gap-1.5">
                       <span className="font-extrabold text-base tracking-tight text-slate-900">Homi</span>
                       {cloudReady ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                          <Cloud className="w-3 h-3" /> Na żywo
+                          ☁️ Na żywo
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                          <CloudOff className="w-3 h-3" /> Łączenie...
+                          ⏳ Łączenie...
                         </span>
                       )}
                     </div>
@@ -378,6 +396,7 @@
             </div>
           </header>
 
+          {/* GŁÓWNA ZAWARTOŚĆ */}
           <main className="flex-1 p-3 space-y-3 max-w-lg mx-auto w-full">
             {activeTab === 'pulpit' && (
               <>
@@ -398,7 +417,7 @@
                         className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 text-left transition active:scale-95"
                       >
                         <span className="font-semibold text-xs truncate">{q.icon} {q.name}</span>
-                        <Plus className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="text-emerald-600 font-bold text-sm">＋</span>
                       </button>
                     ))}
                   </div>
@@ -407,8 +426,7 @@
                 <section className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm">
                   <div className="flex items-center justify-between mb-2.5">
                     <h2 className="font-bold text-slate-900 flex items-center gap-1.5">
-                      <ShoppingCart className="w-4 h-4 text-rose-500" />
-                      Braki do kupienia ({neededShopping.length})
+                      🛒 Braki do kupienia ({neededShopping.length})
                     </h2>
                     <button onClick={() => setActiveTab('zakupy')} className="text-xs font-bold text-emerald-600">
                       Pełna lista →
@@ -435,7 +453,7 @@
                               onClick={() => toggleBought(item.id)}
                               className="shrink-0 px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs flex items-center gap-1 active:scale-95"
                             >
-                              <Check className="w-3.5 h-3.5" /> Kupione!
+                              ✓ Kupione!
                             </button>
                           </div>
                         );
@@ -447,8 +465,7 @@
                 <section className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm">
                   <div className="flex items-center justify-between mb-2.5">
                     <h2 className="font-bold text-slate-900 flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-emerald-600" />
-                      Sprzątanie ({selectedDay})
+                      ✨ Sprzątanie ({selectedDay})
                     </h2>
                     <button onClick={() => setActiveTab('sprzatanie')} className="text-xs font-bold text-emerald-600">
                       Grafik →
@@ -472,7 +489,7 @@
                               onClick={() => toggleChore(c.id)}
                               className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 ${c.done ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-900 text-white'}`}
                             >
-                              <Check className="w-3.5 h-3.5" /> {c.done ? 'Zrobione' : 'Odhacz'}
+                              ✓ {c.done ? 'Zrobione' : 'Odhacz'}
                             </button>
                           </div>
                         );
@@ -484,12 +501,11 @@
                 <section className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm">
                   <div className="flex items-center justify-between mb-2.5">
                     <h2 className="font-bold text-slate-900 flex items-center gap-1.5">
-                      <Shirt className="w-4 h-4 text-blue-600" />
-                      Pranie ({selectedDay})
+                      👕 Pranie ({selectedDay})
                     </h2>
                     {isRackBusyToday && (
-                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 flex items-center gap-1">
-                        <Wind className="w-3 h-3" /> Suszarka zajęta
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                        🌬️ Suszarka zajęta
                       </span>
                     )}
                   </div>
@@ -524,8 +540,8 @@
                     <h2 className="font-bold text-slate-900">Grafik Sprzątania ({selectedDay})</h2>
                     <p className="text-xs text-slate-500">Przesuń obowiązki na nowy tydzień</p>
                   </div>
-                  <button onClick={rotateChores} className="px-3 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs flex items-center gap-1">
-                    <RotateCcw className="w-3.5 h-3.5" /> Rotuj dyżury
+                  <button onClick={rotateChores} className="px-3 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs">
+                    🔄 Rotuj dyżury
                   </button>
                 </div>
 
@@ -549,8 +565,8 @@
                     <select value={newChoreUser} onChange={(e) => setNewChoreUser(e.target.value)} className="px-2.5 py-2 rounded-xl border border-slate-200 text-xs bg-white">
                       {users.map((u) => <option key={u.id} value={u.id}>{u.avatar} {u.name}</option>)}
                     </select>
-                    <button type="submit" className="bg-slate-900 text-white font-bold rounded-xl text-xs py-2 flex items-center justify-center gap-1">
-                      <Plus className="w-4 h-4" /> Dodaj
+                    <button type="submit" className="bg-slate-900 text-white font-bold rounded-xl text-xs py-2">
+                      ＋ Dodaj
                     </button>
                   </div>
                 </form>
@@ -569,7 +585,7 @@
                             {c.done ? 'Gotowe ✓' : 'Odhacz'}
                           </button>
                           <button onClick={() => deleteChore(c.id)} className="p-1.5 text-slate-400 hover:text-rose-600">
-                            <Trash2 className="w-4 h-4" />
+                            🗑️
                           </button>
                         </div>
                       </div>
@@ -604,8 +620,8 @@
                       <input type="checkbox" checked={newLaundryRack} onChange={(e) => setNewLaundryRack(e.target.checked)} className="rounded text-emerald-600" />
                       Zajmuję rozkładaną suszarkę
                     </label>
-                    <button type="submit" className="px-3.5 py-2 bg-blue-600 text-white font-bold rounded-xl text-xs flex items-center gap-1">
-                      <Plus className="w-4 h-4" /> Rezerwuj
+                    <button type="submit" className="px-3.5 py-2 bg-blue-600 text-white font-bold rounded-xl text-xs">
+                      ＋ Rezerwuj
                     </button>
                   </div>
                 </form>
@@ -624,7 +640,7 @@
                             {l.status}
                           </button>
                           <button onClick={() => deleteLaundry(l.id)} className="p-1.5 text-slate-400 hover:text-rose-600">
-                            <Trash2 className="w-4 h-4" />
+                            🗑️
                           </button>
                         </div>
                       </div>
@@ -663,8 +679,8 @@
                       <option value="konczy">🟠 Kończy się</option>
                       <option value="zapas">🔵 Na zapas</option>
                     </select>
-                    <button type="submit" className="bg-emerald-600 text-white font-bold rounded-xl text-xs py-2 flex items-center justify-center gap-1">
-                      <Plus className="w-4 h-4" /> Dodaj
+                    <button type="submit" className="bg-emerald-600 text-white font-bold rounded-xl text-xs py-2">
+                      ＋ Dodaj
                     </button>
                   </div>
                 </form>
@@ -680,11 +696,11 @@
                           <p className="text-[11px] text-slate-500">{item.category} • zgłosił(a): {author.avatar} {author.name}</p>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => toggleBought(item.id)} className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs flex items-center gap-1">
-                            <Check className="w-3.5 h-3.5" /> Kupione!
+                          <button onClick={() => toggleBought(item.id)} className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs">
+                            ✓ Kupione!
                           </button>
                           <button onClick={() => deleteShoppingItem(item.id)} className="p-1 text-slate-400 hover:text-rose-600">
-                            <Trash2 className="w-4 h-4" />
+                            🗑️
                           </button>
                         </div>
                       </div>
@@ -720,9 +736,7 @@
             {activeTab === 'domownicy' && (
               <div className="space-y-3">
                 <div className="bg-white rounded-2xl p-3.5 border border-slate-200 space-y-2">
-                  <h2 className="font-bold text-slate-900 flex items-center gap-1.5">
-                    <Award className="w-4 h-4 text-amber-500" /> Ranking zaangażowania
-                  </h2>
+                  <h2 className="font-bold text-slate-900">🏆 Ranking zaangażowania</h2>
                   {users.map((u) => (
                     <div key={u.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
                       <div className="flex items-center gap-2.5">
@@ -749,16 +763,16 @@
             )}
           </main>
 
+          {/* DOLNY PASEK NAWIGACJI */}
           <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 px-2 py-2">
             <div className="max-w-lg mx-auto grid grid-cols-5 gap-1">
               {[
-                { id: 'pulpit', label: 'Pulpit', icon: Home },
-                { id: 'sprzatanie', label: 'Sprzątanie', icon: Sparkles },
-                { id: 'pranie', label: 'Pranie', icon: Shirt },
-                { id: 'zakupy', label: 'Zakupy', icon: ShoppingCart, badge: neededShopping.length },
-                { id: 'domownicy', label: 'Domownicy', icon: Users }
+                { id: 'pulpit', label: 'Pulpit', icon: '🏠' },
+                { id: 'sprzatanie', label: 'Sprzątanie', icon: '✨' },
+                { id: 'pranie', label: 'Pranie', icon: '👕' },
+                { id: 'zakupy', label: 'Zakupy', icon: '🛒', badge: neededShopping.length },
+                { id: 'domownicy', label: 'Domownicy', icon: '👥' }
               ].map((tab) => {
-                const Icon = tab.icon;
                 const active = activeTab === tab.id;
                 return (
                   <button
@@ -766,8 +780,8 @@
                     onClick={() => setActiveTab(tab.id)}
                     className={`relative flex flex-col items-center justify-center py-1 rounded-xl transition ${active ? 'text-emerald-600 font-bold' : 'text-slate-500'}`}
                   >
-                    <Icon className="w-5 h-5" />
-                    <span className="text-[10px] mt-0.5">{tab.label}</span>
+                    <span className="text-base leading-none">{tab.icon}</span>
+                    <span className="text-[10px] mt-1">{tab.label}</span>
                     {tab.badge > 0 && (
                       <span className="absolute top-0 right-3 bg-rose-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
                         {tab.badge}
@@ -782,7 +796,8 @@
       );
     }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
   </script>
 </body>
 </html>
