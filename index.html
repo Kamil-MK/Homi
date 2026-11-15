@@ -1,16 +1,788 @@
 <!DOCTYPE html>
 <html lang="pl">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Homi" />
-    <meta name="theme-color" content="#059669" />
-    <title>Homi - home management</title>
-  </head>
-  <body class="bg-slate-50 select-none">
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Homi" />
+  <meta name="theme-color" content="#059669" />
+  <title>Homi - home management</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Ikony Lucide oraz React + Babel -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    body { -webkit-tap-highlight-color: transparent; user-select: none; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <div id="root"></div>
+
+  <script type="text/babel" data-type="module">
+    import React, { useState, useEffect } from 'https://esm.sh/react@18.3.1';
+    import ReactDOM from 'https://esm.sh/react-dom@18.3.1/client';
+    import {
+      Home, Sparkles, Shirt, ShoppingCart, Users, Plus, Check, Trash2,
+      Cloud, CloudOff, Award, RotateCcw, Wind
+    } from 'https://esm.sh/lucide-react@0.460.0';
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
+    import { getFirestore, doc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js';
+
+    // TWOJE KLUCZE FIREBASE (homi-dom)
+    const firebaseConfig = {
+      apiKey: "AIzaSyDZWnw5OArzyHNmgGKDOATnq3gYlyO4m40",
+      authDomain: "homi-dom.firebaseapp.com",
+      projectId: "homi-dom",
+      storageBucket: "homi-dom.firebasestorage.app",
+      messagingSenderId: "548679313168",
+      appId: "1:548679313168:web:24e8c59bd0dcd9822e2795",
+      measurementId: "G-W4SKHK140B"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const DAYS = [
+      { short: 'Pon', full: 'Poniedziałek' },
+      { short: 'Wt', full: 'Wtorek' },
+      { short: 'Śr', full: 'Środa' },
+      { short: 'Czw', full: 'Czwartek' },
+      { short: 'Pt', full: 'Piątek' },
+      { short: 'Sob', full: 'Sobota' },
+      { short: 'Ndz', full: 'Niedziela' }
+    ];
+
+    const INITIAL_USERS = [
+      { id: 'u1', name: 'Żabka', avatar: '💍', points: 45 },
+      { id: 'u2', name: 'Pałek', avatar: '🦔', points: 40 }
+    ];
+
+    const INITIAL_CHORES = [
+      { id: 'c1', day: 'Pon', title: 'Odkurzanie salonu i sypialni', room: 'Salon', userId: 'u1', points: 15, done: false },
+      { id: 'c2', day: 'Pon', title: 'Mycie blatów i zlewu', room: 'Kuchnia', userId: 'u2', points: 10, done: true },
+      { id: 'c3', day: 'Śr', title: 'Czyszczenie łazienki i lustra', room: 'Łazienka', userId: 'u1', points: 20, done: false },
+      { id: 'c4', day: 'Pt', title: 'Mycie podłóg w całym domu', room: 'Cały dom', userId: 'u2', points: 25, done: false },
+      { id: 'c5', day: 'Sob', title: 'Wyrzucenie śmieci i segregacja', room: 'Kuchnia', userId: 'u1', points: 10, done: false }
+    ];
+
+    const INITIAL_LAUNDRY = [
+      { id: 'l1', day: 'Pon', time: '17:00 - 19:00', program: 'Kolory 40°C', userId: 'u1', status: 'Suszy się', rackUsed: true },
+      { id: 'l2', day: 'Śr', time: '18:00 - 20:00', program: 'Białe 60°C', userId: 'u2', status: 'Zaplanowane', rackUsed: false },
+      { id: 'l3', day: 'Sob', time: '10:00 - 12:30', program: 'Pościel i ręczniki', userId: 'u1', status: 'Zaplanowane', rackUsed: true }
+    ];
+
+    const INITIAL_SHOPPING = [
+      { id: 's1', name: 'Papier toaletowy (8 rolek)', category: 'Higiena', urgency: 'pilne', addedBy: 'u1', bought: false, boughtBy: null, boughtAt: null },
+      { id: 's2', name: 'Płyn do płukania tkanin', category: 'Chemia', urgency: 'konczy', addedBy: 'u2', bought: false, boughtBy: null, boughtAt: null },
+      { id: 's3', name: 'Worki na śmieci 60L', category: 'Kuchnia', urgency: 'pilne', addedBy: 'u1', bought: false, boughtBy: null, boughtAt: null },
+      { id: 's4', name: 'Kapsułki do zmywarki', category: 'Chemia', urgency: 'zapas', addedBy: 'u2', bought: true, boughtBy: 'u2', boughtAt: '14:20' }
+    ];
+
+    const QUICK_ITEMS = [
+      { name: 'Papier toaletowy', category: 'Higiena', urgency: 'pilne', icon: '🧻' },
+      { name: 'Chemia / Płyn', category: 'Chemia', urgency: 'konczy', icon: '🧴' },
+      { name: 'Worki na śmieci', category: 'Kuchnia', urgency: 'pilne', icon: '🗑️' },
+      { name: 'Kapsułki do prania', category: 'Chemia', urgency: 'konczy', icon: '🧺' }
+    ];
+
+    function App() {
+      const [activeTab, setActiveTab] = useState('pulpit');
+      const [selectedDay, setSelectedDay] = useState(() => {
+        const map = ['Ndz', 'Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob'];
+        return map[new Date().getDay()] || 'Pon';
+      });
+      const [largeText, setLargeText] = useState(false);
+
+      const [users, setUsers] = useState(INITIAL_USERS);
+      const [activeUserId, setActiveUserId] = useState(() => localStorage.getItem('homi_user') || 'u1');
+      const [chores, setChores] = useState(INITIAL_CHORES);
+      const [laundry, setLaundry] = useState(INITIAL_LAUNDRY);
+      const [shopping, setShopping] = useState(INITIAL_SHOPPING);
+      const [cloudReady, setCloudReady] = useState(false);
+
+      const [newItemName, setNewItemName] = useState('');
+      const [newItemCategory, setNewItemCategory] = useState('Chemia');
+      const [newItemUrgency, setNewItemUrgency] = useState('pilne');
+
+      const [newChoreTitle, setNewChoreTitle] = useState('');
+      const [newChoreRoom, setNewChoreRoom] = useState('Salon');
+      const [newChoreUser, setNewChoreUser] = useState('u1');
+      const [newChorePoints, setNewChorePoints] = useState(15);
+
+      const [newLaundryTime, setNewLaundryTime] = useState('18:00 - 20:00');
+      const [newLaundryProg, setNewLaundryProg] = useState('Kolory 40°C');
+      const [newLaundryRack, setNewLaundryRack] = useState(true);
+
+      const [newUserName, setNewUserName] = useState('');
+      const [newUserAvatar, setNewUserAvatar] = useState('🐱');
+
+      const handleSelectUser = (id) => {
+        setActiveUserId(id);
+        localStorage.setItem('homi_user', id);
+      };
+
+      useEffect(() => {
+        const docRef = doc(db, 'households', 'nasz-dom');
+        const unsub = onSnapshot(
+          docRef,
+          (snap) => {
+            setCloudReady(true);
+            if (snap.exists()) {
+              const data = snap.data();
+              if (data.users) setUsers(data.users);
+              if (data.chores) setChores(data.chores);
+              if (data.laundry) setLaundry(data.laundry);
+              if (data.shopping) setShopping(data.shopping);
+            } else {
+              setDoc(docRef, {
+                users: INITIAL_USERS,
+                chores: INITIAL_CHORES,
+                laundry: INITIAL_LAUNDRY,
+                shopping: INITIAL_SHOPPING,
+                updatedAt: Date.now()
+              });
+            }
+          },
+          (err) => {
+            console.error('Błąd Firestore:', err);
+            setCloudReady(false);
+          }
+        );
+        return () => unsub();
+      }, []);
+
+      const syncState = async (nextUsers, nextChores, nextLaundry, nextShopping) => {
+        setUsers(nextUsers);
+        setChores(nextChores);
+        setLaundry(nextLaundry);
+        setShopping(nextShopping);
+        try {
+          const docRef = doc(db, 'households', 'nasz-dom');
+          await setDoc(docRef, {
+            users: nextUsers,
+            chores: nextChores,
+            laundry: nextLaundry,
+            shopping: nextShopping,
+            updatedAt: Date.now()
+          });
+        } catch (e) {
+          console.error('Błąd zapisu:', e);
+        }
+      };
+
+      const getUser = (id) => users.find((u) => u.id === id) || users[0] || { name: 'Domownik', avatar: '🏠' };
+      const activeUser = getUser(activeUserId);
+
+      const toggleBought = (itemId) => {
+        const timeStr = new Date().toTimeString().slice(0, 5);
+        let pointsDelta = 0;
+        const nextShopping = shopping.map((item) => {
+          if (item.id !== itemId) return item;
+          const nextBought = !item.bought;
+          pointsDelta = nextBought ? 5 : -5;
+          return {
+            ...item,
+            bought: nextBought,
+            boughtBy: nextBought ? activeUserId : null,
+            boughtAt: nextBought ? timeStr : null
+          };
+        });
+        const nextUsers = users.map((u) =>
+          u.id === activeUserId ? { ...u, points: Math.max(0, u.points + pointsDelta) } : u
+        );
+        syncState(nextUsers, chores, laundry, nextShopping);
+      };
+
+      const addShoppingItem = (name, category = 'Chemia', urgency = 'pilne') => {
+        if (!name.trim()) return;
+        const newItem = {
+          id: 's_' + Date.now(),
+          name: name.trim(),
+          category,
+          urgency,
+          addedBy: activeUserId,
+          bought: false,
+          boughtBy: null,
+          boughtAt: null
+        };
+        syncState(users, chores, laundry, [newItem, ...shopping]);
+        setNewItemName('');
+      };
+
+      const deleteShoppingItem = (id) => syncState(users, chores, laundry, shopping.filter((i) => i.id !== id));
+      const clearBoughtItems = () => syncState(users, chores, laundry, shopping.filter((i) => !i.bought));
+
+      const toggleChore = (choreId) => {
+        let pointsDelta = 0;
+        let targetUser = activeUserId;
+        const nextChores = chores.map((c) => {
+          if (c.id !== choreId) return c;
+          const nextDone = !c.done;
+          pointsDelta = nextDone ? c.points : -c.points;
+          targetUser = c.userId;
+          return { ...c, done: nextDone };
+        });
+        const nextUsers = users.map((u) =>
+          u.id === targetUser ? { ...u, points: Math.max(0, u.points + pointsDelta) } : u
+        );
+        syncState(nextUsers, nextChores, laundry, shopping);
+      };
+
+      const rotateChores = () => {
+        if (users.length < 2) return;
+        const nextChores = chores.map((c) => {
+          const idx = users.findIndex((u) => u.id === c.userId);
+          const nextIdx = (idx + 1) % users.length;
+          return { ...c, userId: users[nextIdx].id, done: false };
+        });
+        syncState(users, nextChores, laundry, shopping);
+      };
+
+      const handleAddChore = (e) => {
+        e.preventDefault();
+        if (!newChoreTitle.trim()) return;
+        const item = {
+          id: 'c_' + Date.now(),
+          day: selectedDay,
+          title: newChoreTitle.trim(),
+          room: newChoreRoom,
+          userId: newChoreUser,
+          points: Number(newChorePoints) || 10,
+          done: false
+        };
+        syncState(users, [...chores, item], laundry, shopping);
+        setNewChoreTitle('');
+      };
+
+      const deleteChore = (id) => syncState(users, chores.filter((c) => c.id !== id), laundry, shopping);
+
+      const cycleLaundryStatus = (id) => {
+        const order = ['Zaplanowane', 'W pralce', 'Suszy się', 'Gotowe'];
+        const nextLaundry = laundry.map((l) => {
+          if (l.id !== id) return l;
+          const nextStatus = order[(order.indexOf(l.status) + 1) % order.length];
+          return { ...l, status: nextStatus, rackUsed: nextStatus === 'Suszy się' ? true : l.rackUsed };
+        });
+        syncState(users, chores, nextLaundry, shopping);
+      };
+
+      const handleAddLaundry = (e) => {
+        e.preventDefault();
+        const item = {
+          id: 'l_' + Date.now(),
+          day: selectedDay,
+          time: newLaundryTime,
+          program: newLaundryProg,
+          userId: activeUserId,
+          status: 'Zaplanowane',
+          rackUsed: newLaundryRack
+        };
+        syncState(users, chores, [...laundry, item], shopping);
+      };
+
+      const deleteLaundry = (id) => syncState(users, chores, laundry.filter((l) => l.id !== id), shopping);
+
+      const handleAddUser = (e) => {
+        e.preventDefault();
+        if (!newUserName.trim()) return;
+        const newUser = {
+          id: 'u_' + Date.now(),
+          name: newUserName.trim(),
+          avatar: newUserAvatar || '🙂',
+          points: 0
+        };
+        syncState([...users, newUser], chores, laundry, shopping);
+        setNewUserName('');
+      };
+
+      const dayChores = chores.filter((c) => c.day === selectedDay);
+      const dayLaundry = laundry.filter((l) => l.day === selectedDay);
+      const neededShopping = shopping.filter((s) => !s.bought);
+      const boughtShopping = shopping.filter((s) => s.bought);
+      const isRackBusyToday = dayLaundry.some((l) => l.rackUsed && l.status !== 'Gotowe');
+
+      return (
+        <div className={`min-h-screen bg-slate-50 text-slate-900 flex flex-col justify-between pb-20 ${largeText ? 'text-base' : 'text-sm'}`}>
+          <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-3 py-2.5 shadow-sm">
+            <div className="max-w-lg mx-auto">
+              <div className="flex items-center justify-between gap-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold">
+                    <Home className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-extrabold text-base tracking-tight text-slate-900">Homi</span>
+                      {cloudReady ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          <Cloud className="w-3 h-3" /> Na żywo
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                          <CloudOff className="w-3 h-3" /> Łączenie...
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-none">home management</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <div className="flex bg-slate-100 p-0.5 rounded-xl">
+                    {users.map((u) => (
+                      <button
+                        key={u.id}
+                        onClick={() => handleSelectUser(u.id)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+                          activeUserId === u.id ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600'
+                        }`}
+                      >
+                        <span>{u.avatar}</span>
+                        <span className="truncate max-w-[65px]">{u.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setLargeText(!largeText)}
+                    className={`px-2 py-1 rounded-lg border text-xs font-bold ${
+                      largeText ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    {largeText ? 'A+' : 'A'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-7 gap-1 mt-2.5">
+                {DAYS.map((d) => {
+                  const hasTask = chores.some((c) => c.day === d.short && !c.done);
+                  const active = selectedDay === d.short;
+                  return (
+                    <button
+                      key={d.short}
+                      onClick={() => setSelectedDay(d.short)}
+                      className={`py-1.5 rounded-xl font-bold text-xs flex flex-col items-center justify-center transition ${
+                        active ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      <span>{d.short}</span>
+                      {hasTask && (
+                        <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${active ? 'bg-white' : 'bg-amber-500'}`} />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </header>
+
+          <main className="flex-1 p-3 space-y-3 max-w-lg mx-auto w-full">
+            {activeTab === 'pulpit' && (
+              <>
+                <section className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-bold text-xs uppercase tracking-wider text-slate-500">
+                      Szybkie zgłoszenie (+1 klik)
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      Jako: <strong>{activeUser.avatar} {activeUser.name}</strong>
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {QUICK_ITEMS.map((q) => (
+                      <button
+                        key={q.name}
+                        onClick={() => addShoppingItem(q.name, q.category, q.urgency)}
+                        className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 text-left transition active:scale-95"
+                      >
+                        <span className="font-semibold text-xs truncate">{q.icon} {q.name}</span>
+                        <Plus className="w-4 h-4 text-emerald-600 shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <h2 className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <ShoppingCart className="w-4 h-4 text-rose-500" />
+                      Braki do kupienia ({neededShopping.length})
+                    </h2>
+                    <button onClick={() => setActiveTab('zakupy')} className="text-xs font-bold text-emerald-600">
+                      Pełna lista →
+                    </button>
+                  </div>
+                  {neededShopping.length === 0 ? (
+                    <p className="text-xs text-slate-500 py-3 text-center">Wszystko uzupełnione!</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {neededShopping.slice(0, 5).map((item) => {
+                        const author = getUser(item.addedBy);
+                        return (
+                          <div key={item.id} className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`w-2 h-2 rounded-full shrink-0 ${item.urgency === 'pilne' ? 'bg-rose-500' : item.urgency === 'konczy' ? 'bg-amber-500' : 'bg-blue-500'}`} />
+                                <span className="font-bold truncate">{item.name}</span>
+                              </div>
+                              <p className="text-[11px] text-slate-500">
+                                {item.category} • zgłosił(a): {author.avatar} {author.name}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => toggleBought(item.id)}
+                              className="shrink-0 px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs flex items-center gap-1 active:scale-95"
+                            >
+                              <Check className="w-3.5 h-3.5" /> Kupione!
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+
+                <section className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <h2 className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-emerald-600" />
+                      Sprzątanie ({selectedDay})
+                    </h2>
+                    <button onClick={() => setActiveTab('sprzatanie')} className="text-xs font-bold text-emerald-600">
+                      Grafik →
+                    </button>
+                  </div>
+                  {dayChores.length === 0 ? (
+                    <p className="text-xs text-slate-500 py-3 text-center">Brak zadań na {selectedDay}.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {dayChores.map((c) => {
+                        const assigned = getUser(c.userId);
+                        return (
+                          <div key={c.id} className={`flex items-center justify-between p-2.5 rounded-xl border ${c.done ? 'bg-emerald-50/50 border-emerald-200 opacity-75' : 'bg-slate-50 border-slate-200'}`}>
+                            <div className="min-w-0">
+                              <p className={`font-bold truncate ${c.done ? 'line-through text-slate-400' : ''}`}>{c.title}</p>
+                              <p className="text-[11px] text-slate-500">
+                                {c.room} • Dyżur: <strong>{assigned.avatar} {assigned.name}</strong> (+{c.points} pkt)
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => toggleChore(c.id)}
+                              className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 ${c.done ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-900 text-white'}`}
+                            >
+                              <Check className="w-3.5 h-3.5" /> {c.done ? 'Zrobione' : 'Odhacz'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+
+                <section className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <h2 className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Shirt className="w-4 h-4 text-blue-600" />
+                      Pranie ({selectedDay})
+                    </h2>
+                    {isRackBusyToday && (
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 flex items-center gap-1">
+                        <Wind className="w-3 h-3" /> Suszarka zajęta
+                      </span>
+                    )}
+                  </div>
+                  {dayLaundry.length === 0 ? (
+                    <p className="text-xs text-slate-500 py-3 text-center">Pralka wolna przez cały dzień ({selectedDay}).</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {dayLaundry.map((l) => {
+                        const owner = getUser(l.userId);
+                        return (
+                          <div key={l.id} className="flex items-center justify-between p-2.5 rounded-xl bg-blue-50/50 border border-blue-200">
+                            <div>
+                              <p className="font-bold text-slate-900">{l.time} • {l.program}</p>
+                              <p className="text-[11px] text-slate-600">{owner.avatar} {owner.name} {l.rackUsed ? '• Zajmuje suszarkę' : ''}</p>
+                            </div>
+                            <button onClick={() => cycleLaundryStatus(l.id)} className="px-3 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs">
+                              {l.status}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+              </>
+            )}
+
+            {activeTab === 'sprzatanie' && (
+              <div className="space-y-3">
+                <div className="bg-white rounded-2xl p-3.5 border border-slate-200 flex items-center justify-between">
+                  <div>
+                    <h2 className="font-bold text-slate-900">Grafik Sprzątania ({selectedDay})</h2>
+                    <p className="text-xs text-slate-500">Przesuń obowiązki na nowy tydzień</p>
+                  </div>
+                  <button onClick={rotateChores} className="px-3 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs flex items-center gap-1">
+                    <RotateCcw className="w-3.5 h-3.5" /> Rotuj dyżury
+                  </button>
+                </div>
+
+                <form onSubmit={handleAddChore} className="bg-white rounded-2xl p-3.5 border border-slate-200 space-y-2.5">
+                  <p className="font-bold text-xs text-slate-700">Dodaj zadanie na: {selectedDay}</p>
+                  <input
+                    type="text"
+                    placeholder="Np. Umycie piekarnika..."
+                    value={newChoreTitle}
+                    onChange={(e) => setNewChoreTitle(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm"
+                  />
+                  <div className="grid grid-cols-3 gap-2">
+                    <select value={newChoreRoom} onChange={(e) => setNewChoreRoom(e.target.value)} className="px-2.5 py-2 rounded-xl border border-slate-200 text-xs bg-white">
+                      <option>Salon</option>
+                      <option>Kuchnia</option>
+                      <option>Łazienka</option>
+                      <option>Sypialnia</option>
+                      <option>Cały dom</option>
+                    </select>
+                    <select value={newChoreUser} onChange={(e) => setNewChoreUser(e.target.value)} className="px-2.5 py-2 rounded-xl border border-slate-200 text-xs bg-white">
+                      {users.map((u) => <option key={u.id} value={u.id}>{u.avatar} {u.name}</option>)}
+                    </select>
+                    <button type="submit" className="bg-slate-900 text-white font-bold rounded-xl text-xs py-2 flex items-center justify-center gap-1">
+                      <Plus className="w-4 h-4" /> Dodaj
+                    </button>
+                  </div>
+                </form>
+
+                <div className="space-y-2">
+                  {dayChores.map((c) => {
+                    const assigned = getUser(c.userId);
+                    return (
+                      <div key={c.id} className="bg-white rounded-2xl p-3.5 border border-slate-200 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className={`font-bold ${c.done ? 'line-through text-slate-400' : 'text-slate-900'}`}>{c.title}</p>
+                          <p className="text-xs text-slate-500">{c.room} • {assigned.avatar} {assigned.name} • +{c.points} pkt</p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => toggleChore(c.id)} className={`px-3 py-1.5 rounded-xl font-bold text-xs ${c.done ? 'bg-emerald-100 text-emerald-800' : 'bg-emerald-600 text-white'}`}>
+                            {c.done ? 'Gotowe ✓' : 'Odhacz'}
+                          </button>
+                          <button onClick={() => deleteChore(c.id)} className="p-1.5 text-slate-400 hover:text-rose-600">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'pranie' && (
+              <div className="space-y-3">
+                <form onSubmit={handleAddLaundry} className="bg-white rounded-2xl p-3.5 border border-slate-200 space-y-2.5">
+                  <p className="font-bold text-xs text-slate-700">Zarezerwuj pralkę ({selectedDay}) jako {activeUser.avatar} {activeUser.name}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={newLaundryTime}
+                      onChange={(e) => setNewLaundryTime(e.target.value)}
+                      placeholder="Godziny np. 18:00 - 20:00"
+                      className="px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                    />
+                    <select value={newLaundryProg} onChange={(e) => setNewLaundryProg(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white">
+                      <option>Kolory 40°C</option>
+                      <option>Białe 60°C</option>
+                      <option>Pościel i ręczniki</option>
+                      <option>Szybkie 30 min</option>
+                      <option>Delikatne</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-between pt-1">
+                    <label className="flex items-center gap-2 text-xs text-slate-700 font-medium">
+                      <input type="checkbox" checked={newLaundryRack} onChange={(e) => setNewLaundryRack(e.target.checked)} className="rounded text-emerald-600" />
+                      Zajmuję rozkładaną suszarkę
+                    </label>
+                    <button type="submit" className="px-3.5 py-2 bg-blue-600 text-white font-bold rounded-xl text-xs flex items-center gap-1">
+                      <Plus className="w-4 h-4" /> Rezerwuj
+                    </button>
+                  </div>
+                </form>
+
+                <div className="space-y-2">
+                  {dayLaundry.map((l) => {
+                    const owner = getUser(l.userId);
+                    return (
+                      <div key={l.id} className="bg-white rounded-2xl p-3.5 border border-slate-200 flex items-center justify-between gap-2">
+                        <div>
+                          <p className="font-bold text-slate-900">{l.time} • {l.program}</p>
+                          <p className="text-xs text-slate-500">{owner.avatar} {owner.name} {l.rackUsed ? '• Suszarka zajęta' : ''}</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => cycleLaundryStatus(l.id)} className="px-3 py-1.5 rounded-xl bg-blue-100 text-blue-800 font-bold text-xs">
+                            {l.status}
+                          </button>
+                          <button onClick={() => deleteLaundry(l.id)} className="p-1.5 text-slate-400 hover:text-rose-600">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'zakupy' && (
+              <div className="space-y-3">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    addShoppingItem(newItemName, newItemCategory, newItemUrgency);
+                  }}
+                  className="bg-white rounded-2xl p-3.5 border border-slate-200 space-y-2.5"
+                >
+                  <p className="font-bold text-xs text-slate-700">Dopisz brakujący produkt</p>
+                  <input
+                    type="text"
+                    placeholder="Np. Papier toaletowy, płyn do naczyń..."
+                    value={newItemName}
+                    onChange={(e) => setNewItemName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm"
+                  />
+                  <div className="grid grid-cols-3 gap-2">
+                    <select value={newItemCategory} onChange={(e) => setNewItemCategory(e.target.value)} className="px-2.5 py-2 rounded-xl border border-slate-200 text-xs bg-white">
+                      <option>Higiena</option>
+                      <option>Chemia</option>
+                      <option>Kuchnia</option>
+                      <option>Spożywcze</option>
+                    </select>
+                    <select value={newItemUrgency} onChange={(e) => setNewItemUrgency(e.target.value)} className="px-2.5 py-2 rounded-xl border border-slate-200 text-xs bg-white">
+                      <option value="pilne">🔴 Brak!</option>
+                      <option value="konczy">🟠 Kończy się</option>
+                      <option value="zapas">🔵 Na zapas</option>
+                    </select>
+                    <button type="submit" className="bg-emerald-600 text-white font-bold rounded-xl text-xs py-2 flex items-center justify-center gap-1">
+                      <Plus className="w-4 h-4" /> Dodaj
+                    </button>
+                  </div>
+                </form>
+
+                <div className="bg-white rounded-2xl p-3.5 border border-slate-200 space-y-2">
+                  <h3 className="font-bold text-xs uppercase tracking-wider text-slate-500">Do kupienia ({neededShopping.length})</h3>
+                  {neededShopping.map((item) => {
+                    const author = getUser(item.addedBy);
+                    return (
+                      <div key={item.id} className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-900 truncate">{item.name}</p>
+                          <p className="text-[11px] text-slate-500">{item.category} • zgłosił(a): {author.avatar} {author.name}</p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => toggleBought(item.id)} className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5" /> Kupione!
+                          </button>
+                          <button onClick={() => deleteShoppingItem(item.id)} className="p-1 text-slate-400 hover:text-rose-600">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {boughtShopping.length > 0 && (
+                  <div className="bg-white rounded-2xl p-3.5 border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-xs uppercase tracking-wider text-emerald-700">Kupione ({boughtShopping.length})</h3>
+                      <button onClick={clearBoughtItems} className="text-xs text-rose-600 font-bold">Wyczyść kupione</button>
+                    </div>
+                    {boughtShopping.map((item) => {
+                      const buyer = getUser(item.boughtBy);
+                      return (
+                        <div key={item.id} className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-200">
+                          <div>
+                            <p className="font-semibold line-through text-slate-500">{item.name}</p>
+                            <p className="text-[11px] text-emerald-800 font-medium">
+                              Kupione przez: {buyer.avatar} {buyer.name} {item.boughtAt ? `o ${item.boughtAt}` : ''}
+                            </p>
+                          </div>
+                          <button onClick={() => toggleBought(item.id)} className="text-xs font-bold text-slate-600 underline px-2 py-1">Cofnij</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'domownicy' && (
+              <div className="space-y-3">
+                <div className="bg-white rounded-2xl p-3.5 border border-slate-200 space-y-2">
+                  <h2 className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <Award className="w-4 h-4 text-amber-500" /> Ranking zaangażowania
+                  </h2>
+                  {users.map((u) => (
+                    <div key={u.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-2xl">{u.avatar}</span>
+                        <div>
+                          <p className="font-bold text-slate-900">{u.name}</p>
+                          <p className="text-xs text-slate-500">Aktywny domownik</p>
+                        </div>
+                      </div>
+                      <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-xs">{u.points} pkt</span>
+                    </div>
+                  ))}
+                </div>
+
+                <form onSubmit={handleAddUser} className="bg-white rounded-2xl p-3.5 border border-slate-200 space-y-2.5">
+                  <p className="font-bold text-xs text-slate-700">Dodaj kolejnego domownika</p>
+                  <div className="flex gap-2">
+                    <input type="text" value={newUserAvatar} onChange={(e) => setNewUserAvatar(e.target.value)} className="w-12 text-center py-2 rounded-xl border border-slate-200 text-base" placeholder="💍" />
+                    <input type="text" value={newUserName} onChange={(e) => setNewUserName(e.target.value)} placeholder="Imię lub ksywka..." className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-sm" />
+                    <button type="submit" className="px-4 py-2 bg-slate-900 text-white font-bold rounded-xl text-xs">Dodaj</button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </main>
+
+          <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 px-2 py-2">
+            <div className="max-w-lg mx-auto grid grid-cols-5 gap-1">
+              {[
+                { id: 'pulpit', label: 'Pulpit', icon: Home },
+                { id: 'sprzatanie', label: 'Sprzątanie', icon: Sparkles },
+                { id: 'pranie', label: 'Pranie', icon: Shirt },
+                { id: 'zakupy', label: 'Zakupy', icon: ShoppingCart, badge: neededShopping.length },
+                { id: 'domownicy', label: 'Domownicy', icon: Users }
+              ].map((tab) => {
+                const Icon = tab.icon;
+                const active = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`relative flex flex-col items-center justify-center py-1 rounded-xl transition ${active ? 'text-emerald-600 font-bold' : 'text-slate-500'}`}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span className="text-[10px] mt-0.5">{tab.label}</span>
+                    {tab.badge > 0 && (
+                      <span className="absolute top-0 right-3 bg-rose-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                        {tab.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
 </html>
